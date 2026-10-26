@@ -1,0 +1,98 @@
+#include "HX711.h"
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+// HX711 pins
+#define DT 4
+#define SCK 5
+
+// Output pins
+#define MOTOR 18
+#define LED 19
+#define BUZZER 23
+
+HX711 scale;
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// Adjust after calibrating your load cell
+float calibration_factor = -7050.0;
+float targetWeight = 500.0; // Target feed in grams
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(MOTOR, OUTPUT);
+  pinMode(LED, OUTPUT);
+  pinMode(BUZZER, OUTPUT);
+
+  digitalWrite(MOTOR, LOW);
+  digitalWrite(LED, LOW);
+  digitalWrite(BUZZER, LOW);
+
+  lcd.init();
+  lcd.backlight();
+
+  lcd.setCursor(0, 0);
+  lcd.print("Goat Graze");
+  lcd.setCursor(0, 1);
+  lcd.print("Initializing");
+
+  scale.begin(DT, SCK);
+  scale.set_scale(calibration_factor);
+  scale.tare();
+
+  delay(2000);
+  lcd.clear();
+  lcd.print("System Ready");
+}
+
+void loop() {
+  if (!scale.is_ready()) {
+    digitalWrite(MOTOR, LOW);
+    lcd.clear();
+    lcd.print("Sensor Error");
+    delay(1000);
+    return;
+  }
+
+  float weight = scale.get_units(5);
+
+  Serial.print("Feed weight: ");
+  Serial.println(weight);
+
+  if (weight < 0) {
+    weight = 0;
+  }
+
+  if (weight < targetWeight) {
+    digitalWrite(MOTOR, HIGH);
+
+    lcd.setCursor(0, 0);
+    lcd.print("Dispensing Feed ");
+    lcd.setCursor(0, 1);
+    lcd.print("Please Wait     ");
+
+    digitalWrite(LED, HIGH);
+    digitalWrite(BUZZER, LOW);
+  } else {
+    digitalWrite(MOTOR, LOW);
+
+    lcd.setCursor(0, 0);
+    lcd.print("Feeding Complete");
+    lcd.setCursor(0, 1);
+    lcd.print("Target Reached  ");
+
+    digitalWrite(LED, LOW);
+    digitalWrite(BUZZER, HIGH);
+
+    delay(1000);
+    digitalWrite(BUZZER, LOW);
+
+    // Wait until the next feeding cycle
+    while (true) {
+      delay(1000);
+    }
+  }
+
+  delay(200);
+}
